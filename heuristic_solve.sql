@@ -6,7 +6,6 @@
 -- Get cities/gas stations that are within 5 mile buffer of infeasible segment
 -- Limit to candidate site that is closest to the halfway point
 -- Select into chademo_candidates_wsdot
--- ~1minute
 SELECT *
 INTO chademo_candidates_wsdot
 FROM
