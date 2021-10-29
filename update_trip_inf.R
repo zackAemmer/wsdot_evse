@@ -1,4 +1,8 @@
-Sys.setenv(MAIN_HOST="zae5op-evidss.cwnvvdsd8zo1.us-west-2.rds.amazonaws.com", MAIN_DB="wsdot_evse_dev", MAIN_USER="postgres", MAIN_PWD="!-RJhpyp522R5u", MAIN_PORT="5432")
+Sys.setenv(MAIN_HOST="",
+  MAIN_DB="",
+  MAIN_USER="",
+  MAIN_PWD="",
+  MAIN_PORT="")
 
 #' Updates the trip infeasibility map
 #'
