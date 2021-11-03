@@ -4,186 +4,18 @@ Sys.setenv(MAIN_HOST="",
   MAIN_PWD="",
   MAIN_PORT="")
 
-#' Updates the trip infeasibility map
-#'
-#'
-#'
-#' @export
-#'
-#' @import magrittr
-#' @importFrom utils data
-#' @importFrom rlang .data
-#'
-
-update_trip_inf_chademo <- function () {
-  # Database settings -------------------------------------------------------
-  main_con <- DBI::dbConnect(
-    RPostgres::Postgres(),
-    host = Sys.getenv("MAIN_HOST"),
-    dbname = Sys.getenv("MAIN_DB"),
-    user = Sys.getenv("MAIN_USER"),
-    password = Sys.getenv("MAIN_PWD"),
-    port = Sys.getenv("MAIN_PORT")
-  )
-  
-  # Get only unique OD/DO combos
-  all_trips <- DBI::dbGetQuery(main_con,
-                               "SELECT *
-                               FROM (SELECT origin,
-                                            destination,
-                                            SUM(ccounts) AS ccounts
-                                    FROM (SELECT
-                                          CASE WHEN origin <= destination THEN origin ELSE destination END AS origin,
-                                          CASE WHEN origin <= destination THEN destination ELSE origin END AS destination,
-                                          ccounts
-                                          FROM all_trips_count_full) AS ordered
-                                    GROUP BY origin, destination) AS unique_ods;")
-  
-  for (row in 80212:nrow(all_trips)) {
-    insert_query <-
-      paste0(
-        'INSERT INTO trip_infeasibility_chademo_wsdot (trip_count, od_pairs, length, geom)
-        (SELECT ',all_trips$ccounts[row],' AS trip_count,
-                ',all_trips$origin[row],all_trips$destination[row],' AS od_pairs,
-                sq3.spacings AS length,
-                -- Select portion of the line that was infeasible
-                ST_Linesubstring(sq3.line, sq3.ratio - sq3.ratio_lag, sq3.ratio) AS geom
-        FROM
-        -- Ratio of each infrastructure point (0-1), Lagged distance between prior point (0-1), Actual distance (mi), shortest OD line
-        (SELECT sq2.ratio,
-                (sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) AS ratio_lag,
-                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line::geography) * 0.000621371) AS spacings,
-                line
-        -- Get shortest OD line, ratio of each infrastructure within 10 miles, concat to shortest OD line, 1.0
-        -- Ratio is 0-1 from origin, to the orthogonal point on shortest OD line where infrastructure lies
-        FROM (SELECT ST_LineLocatePoint(line, sq.points) AS ratio,
-                     line
-             FROM sp_od2(',all_trips$origin[row],', ',all_trips$destination[row],') AS line,
-                  -- Get the points of existing evse infrastructure
-                  (SELECT st_setsrid(st_makepoint(longitude, latitude), 4326) AS points
-                  FROM built_evse
-                  WHERE connector_code = 1 OR connector_code = 3) AS sq
-            -- Limit existing infrastructure within 10 miles from the line
-             WHERE st_dwithin(line::GEOGRAPHY, sq.points::GEOGRAPHY, 16093.4)
-             UNION
-             -- Concatenate with list of all shortest lines with ratio of 1.0
-             SELECT 1.0,
-                   line
-             FROM sp_od2(',all_trips$origin[row],', ',all_trips$destination[row],') AS line
-             ORDER BY ratio ASC
-             ) AS sq2
-        ) AS sq3
-        -- Limit to only a single OD at a time (passed in R) and to spacings over 50 miles
-        WHERE (spacings > 50))
-        ON CONFLICT (md5(geom::TEXT))
-        DO UPDATE
-        SET trip_count = trip_infeasibility_chademo_wsdot.trip_count + EXCLUDED.trip_count, 
-           od_pairs = trip_infeasibility_chademo_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
-      )
-    print(row)
-    # print(insert_query)
-    rs = DBI::dbSendQuery(main_con, insert_query)
-    DBI::dbClearResult(rs)
-  }
-}
-
-
-#' Updates the trip infeasibility map
-#'
-#'
-#'
-#' @export
-#'
-#' @import magrittr
-#' @importFrom utils data
-#' @importFrom rlang .data
-#'
-
-update_trip_inf_combo <- function () {
-  # Database settings -------------------------------------------------------
-  main_con <- DBI::dbConnect(
-    RPostgres::Postgres(),
-    host = Sys.getenv("MAIN_HOST"),
-    dbname = Sys.getenv("MAIN_DB"),
-    user = Sys.getenv("MAIN_USER"),
-    password = Sys.getenv("MAIN_PWD"),
-    port = Sys.getenv("MAIN_PORT")
-  )
-  
-  # Get only unique OD/DO combos
-  all_trips <- DBI::dbGetQuery(main_con,
-                               "SELECT *
-                               FROM (SELECT origin,
-                                            destination,
-                                            SUM(ccounts) AS ccounts
-                                    FROM (SELECT
-                                          CASE WHEN origin <= destination THEN origin ELSE destination END AS origin,
-                                          CASE WHEN origin <= destination THEN destination ELSE origin END AS destination,
-                                          ccounts
-                                          FROM all_trips_count_full) AS ordered
-                                    GROUP BY origin, destination) AS unique_ods;")
-  
-  for (row in 1:nrow(all_trips)) {
-    insert_query <-
-      paste0(
-        'INSERT INTO trip_infeasibility_combo_wsdot (trip_count, od_pairs, length, geom)
-        (SELECT ',all_trips$ccounts[row],' AS trip_count,
-                ',all_trips$origin[row],all_trips$destination[row],' AS od_pairs,
-                sq3.spacings AS length,
-                -- Select portion of the line that was infeasible
-                ST_Linesubstring(sq3.line, sq3.ratio - sq3.ratio_lag, sq3.ratio) AS geom
-        FROM
-        -- Ratio of each infrastructure point (0-1), Lagged distance between prior point (0-1), Actual distance (mi), shortest OD line
-        (SELECT sq2.ratio,
-                (sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) AS ratio_lag,
-                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line::geography) * 0.000621371) AS spacings,
-                line
-        -- Get shortest OD line, ratio of each infrastructure within 10 miles, concat to shortest OD line, 1.0
-        -- Ratio is 0-1 from origin, to the orthogonal point on shortest OD line where infrastructure lies
-        FROM (SELECT ST_LineLocatePoint(line, sq.points) AS ratio,
-                     line
-             FROM sp_od2(',all_trips$origin[row],', ',all_trips$destination[row],') AS line,
-                  -- Get the points of existing evse infrastructure
-                  (SELECT st_setsrid(st_makepoint(longitude, latitude), 4326) AS points
-                  FROM built_evse
-                  WHERE connector_code = 2 OR connector_code = 3) AS sq
-            -- Limit existing infrastructure within 10 miles from the line
-             WHERE st_dwithin(line::GEOGRAPHY, sq.points::GEOGRAPHY, 16093.4)
-             UNION
-             -- Concatenate with list of all shortest lines with ratio of 1.0
-             SELECT 1.0,
-                   line
-             FROM sp_od2(',all_trips$origin[row],', ',all_trips$destination[row],') AS line
-             ORDER BY ratio ASC
-             ) AS sq2
-        ) AS sq3
-        -- Limit to only a single OD at a time (passed in R) and to spacings over 50 miles
-        WHERE (spacings > 50))
-        ON CONFLICT (md5(geom::TEXT))
-        DO UPDATE
-        SET trip_count = trip_infeasibility_combo_wsdot.trip_count + EXCLUDED.trip_count, 
-           od_pairs = trip_infeasibility_combo_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
-      )
-    print(row)
-    # print(insert_query)
-    rs = DBI::dbSendQuery(main_con, insert_query)
-    DBI::dbClearResult(rs)
-  }
-}
-
-
-# Upload infeasibility in parallel (~3hrs)
+# Upload infeasibility in parallel
 library(foreach)
 library(doSNOW)
 library(DBI)
 library(RPostgres)
 main_con = dbConnect(
   Postgres(),
-  host = "zae5op-evidss.cwnvvdsd8zo1.us-west-2.rds.amazonaws.com",
-  dbname = "wsdot_evse_dev",
-  user = "postgres",
-  password = "!-RJhpyp522R5u",
-  port = "5432"
+  host = "",
+  dbname = "=",
+  user = "",
+  password = "",
+  port = ""
 )
 
 # Get only unique OD/DO combos
@@ -207,11 +39,11 @@ clusterEvalQ(cl, {
   library(RPostgres)
   main_con = dbConnect(
     Postgres(),
-    host = "zae5op-evidss.cwnvvdsd8zo1.us-west-2.rds.amazonaws.com",
-    dbname = "wsdot_evse_dev",
-    user = "postgres",
-    password = "!-RJhpyp522R5u",
-    port = "5432"
+    host = "",
+    dbname = "",
+    user = "",
+    password = "",
+    port = ""
   )
   NULL
 })
@@ -234,7 +66,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
         -- Ratio of each infrastructure point (0-1), Lagged distance between prior point (0-1), Actual distance (mi), shortest OD line
         (SELECT sq2.ratio,
                 (sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) AS ratio_lag,
-                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line::geography) * 0.000621371) AS spacings,
+                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line) / 0.0224) AS spacings,
                 line
         -- Get shortest OD line, ratio of each infrastructure within 10 miles, concat to shortest OD line, 1.0
         -- Ratio is 0-1 from origin, to the orthogonal point on shortest OD line where infrastructure lies
@@ -246,7 +78,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
                   FROM built_evse
                   WHERE connector_code = 2 OR connector_code = 3) AS sq
             -- Limit existing infrastructure within 10 miles from the line
-             WHERE st_dwithin(line::GEOGRAPHY, sq.points::GEOGRAPHY, 16093.4)
+             WHERE st_dwithin(line, sq.points, .224)
              UNION
              -- Concatenate with list of all shortest lines with ratio of 1.0
              SELECT 1.0,
@@ -262,8 +94,6 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
         SET trip_count = trip_infeasibility_combo_wsdot.trip_count + EXCLUDED.trip_count, 
            od_pairs = trip_infeasibility_combo_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
     )
-  # print(row) 
-  # print(insert_query)
   rs = dbSendQuery(main_con, insert_query)
   dbClearResult(rs)
 }
