@@ -18,6 +18,21 @@ CREATE TABLE trip_infeasibility_combo_wsdot (
 create unique index unique_geom_index_combo_wsdot on trip_infeasibility_combo_wsdot (md5(geom::TEXT));
 
 
+-- Create candidate site tables
+CREATE TABLE combo_candidates_wsdot_2 (
+    id serial primary key,
+    gid integer,
+    trip_count integer,
+    cid integer,
+    type varchar,
+    geom geometry,
+    length double precision,
+    dist_bin integer,
+    dist_to_desired double precision,
+    rank integer
+);
+
+
 -- Fix geometry SRID if necessary from uploaded data
 SELECT UpdateGeometrySRID('trip_infeasibility_chademo_wsdot','geom',4326);
 SELECT UpdateGeometrySRID('trip_infeasibility_combo_wsdot','geom',4326);
