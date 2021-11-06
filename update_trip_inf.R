@@ -1,21 +1,16 @@
-Sys.setenv(MAIN_HOST="",
-  MAIN_DB="",
-  MAIN_USER="",
-  MAIN_PWD="",
-  MAIN_PORT="")
-
 # Upload infeasibility in parallel
 library(foreach)
 library(doSNOW)
 library(DBI)
 library(RPostgres)
+
 main_con = dbConnect(
   Postgres(),
-  host = "",
-  dbname = "=",
-  user = "",
-  password = "",
-  port = ""
+  host = Sys.getenv("MAIN_HOST"),
+  dbname = Sys.getenv("MAIN_DB"),
+  user = Sys.getenv("MAIN_USER"),
+  password = Sys.getenv("MAIN_PWD"),
+  port = Sys.getenv("MAIN_PORT")
 )
 
 # Get only unique OD/DO combos
@@ -39,11 +34,11 @@ clusterEvalQ(cl, {
   library(RPostgres)
   main_con = dbConnect(
     Postgres(),
-    host = "",
-    dbname = "",
-    user = "",
-    password = "",
-    port = ""
+    host = Sys.getenv("MAIN_HOST"),
+    dbname = Sys.getenv("MAIN_DB"),
+    user = Sys.getenv("MAIN_USER"),
+    password = Sys.getenv("MAIN_PWD"),
+    port = Sys.getenv("MAIN_PORT")
   )
   NULL
 })
@@ -51,6 +46,7 @@ clusterEvalQ(cl, {
 pb = txtProgressBar(max=nrow(all_trips), style=3)
 progress <- function(n) setTxtProgressBar(pb, n)
 opts <- list(progress = progress)
+
 
 # INITIAL
 foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packages=c("DBI","RPostgres")) %dopar% {
@@ -87,7 +83,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
              ORDER BY ratio ASC
              ) AS sq2
         ) AS sq3
-        -- Limit to only a single OD at a time (passed in R) and to spacings over 50 miles
+        -- Limit to spacings over 50 miles
         WHERE (spacings > 50))
         ON CONFLICT (md5(geom::TEXT))
         DO UPDATE
@@ -100,8 +96,6 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
 close(pb)
 stopCluster(cl)
 dbDisconnect(main_con)
-
-
 
 
 # UPDATE
@@ -131,8 +125,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
                   WHERE connector_code = 2 OR connector_code = 3
                   UNION ALL
                   SELECT geom AS points
-                  FROM combo_candidates_wsdot
-                  WHERE trip_count > 50000) AS sq
+                  FROM combo_candidates_wsdot_3) AS sq
             -- Limit existing infrastructure within 10 miles from the line
              WHERE st_dwithin(line, sq.points, .224)
              UNION
@@ -143,7 +136,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
              ORDER BY ratio ASC
              ) AS sq2
         ) AS sq3
-        -- Limit to only a single OD at a time (passed in R) and to spacings over 50 miles
+        -- Limit to spacings over 50 miles
         WHERE (spacings > 50))
         ON CONFLICT (md5(geom::TEXT))
         DO UPDATE
@@ -153,3 +146,6 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
   rs = dbSendQuery(main_con, insert_query)
   dbClearResult(rs)
 }
+close(pb)
+stopCluster(cl)
+dbDisconnect(main_con)

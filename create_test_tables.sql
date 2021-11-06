@@ -18,6 +18,26 @@ CREATE TABLE trip_infeasibility_combo_wsdot (
 create unique index unique_geom_index_combo_wsdot on trip_infeasibility_combo_wsdot (md5(geom::TEXT));
 
 
+-- Create secondary tables to hold updated infeasibility after adding candidate sites
+CREATE TABLE trip_infeasibility_chademo_wsdot_2 (
+    trip_count integer, 
+    od_pairs text, 
+    length double precision, 
+    gid serial primary key, 
+    geom geometry
+);
+create unique index unique_geom_index_chademo_wsdot_2 on trip_infeasibility_chademo_wsdot_2 (md5(geom::TEXT));
+
+CREATE TABLE trip_infeasibility_combo_wsdot_2 (
+    trip_count integer, 
+    od_pairs text, 
+    length double precision, 
+    gid serial primary key, 
+    geom geometry
+);
+create unique index unique_geom_index_combo_wsdot_2 on trip_infeasibility_combo_wsdot_2 (md5(geom::TEXT));
+
+
 -- Create candidate site tables
 CREATE TABLE combo_candidates_wsdot_2 (
     id serial primary key,

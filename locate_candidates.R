@@ -48,6 +48,7 @@ for (i in 1:(length(all_vals)-1)) {
               \'GAS\' AS "type",
               ST_LineLocatePoint(segments.geom, geom) AS ratio
               FROM all_gas_stations
+              -- Limit to infrastructure within 5 miles
               WHERE ST_DWithin(segments.geom, geom, .112)) AS candidates) AS ranked_locations
         WHERE rank = 1 AND length <= ',all_vals[i],' AND length > ',all_vals[i+1],' 
         ORDER BY trip_count DESC'
