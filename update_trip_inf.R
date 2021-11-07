@@ -62,19 +62,19 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
         -- Ratio of each infrastructure point (0-1), Lagged distance between prior point (0-1), Actual distance (mi), shortest OD line
         (SELECT sq2.ratio,
                 (sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) AS ratio_lag,
-                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line) / 0.0224) AS spacings,
+                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line) / 0.024) AS spacings,
                 line
         -- Get shortest OD line, ratio of each infrastructure within 10 miles, concat to shortest OD line, 1.0
         -- Ratio is 0-1 from origin, to the orthogonal point on shortest OD line where infrastructure lies
         FROM (SELECT ST_LineLocatePoint(line, sq.points) AS ratio,
                      line
              FROM sp_od2(',all_trips$origin[row],', ',all_trips$destination[row],') AS line,
-                  -- Get the points of existing evse infrastructure, and additional candidate sites
+                  -- Get the points of existing evse infrastructure
                   (SELECT ST_Setsrid(st_makepoint(longitude, latitude), 4326) AS points
                   FROM built_evse
                   WHERE connector_code = 2 OR connector_code = 3) AS sq
             -- Limit existing infrastructure within 10 miles from the line
-             WHERE st_dwithin(line, sq.points, .224)
+             WHERE st_dwithin(line, sq.points, .24)
              UNION
              -- Concatenate with list of all shortest lines with ratio of 1.0
              SELECT 1.0,
@@ -102,7 +102,7 @@ dbDisconnect(main_con)
 foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packages=c("DBI","RPostgres")) %dopar% {
   insert_query <-
     paste0(
-      'INSERT INTO trip_infeasibility_combo_wsdot_2 (trip_count, od_pairs, length, geom)
+      'INSERT INTO trip_infeasibility_combo_after_wsdot (trip_count, od_pairs, length, geom)
         (SELECT ',all_trips$ccounts[row],' AS trip_count,
                 ',all_trips$origin[row],all_trips$destination[row],' AS od_pairs,
                 sq3.spacings AS length,
@@ -112,7 +112,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
         -- Ratio of each infrastructure point (0-1), Lagged distance between prior point (0-1), Actual distance (mi), shortest OD line
         (SELECT sq2.ratio,
                 (sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) AS ratio_lag,
-                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line) / 0.0224) AS spacings,
+                ((sq2.ratio - COALESCE((LAG(sq2.ratio) OVER (ORDER BY sq2.ratio)), 0)) * st_length(line) / 0.024) AS spacings,
                 line
         -- Get shortest OD line, ratio of each infrastructure within 10 miles, concat to shortest OD line, 1.0
         -- Ratio is 0-1 from origin, to the orthogonal point on shortest OD line where infrastructure lies
@@ -125,9 +125,9 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
                   WHERE connector_code = 2 OR connector_code = 3
                   UNION ALL
                   SELECT geom AS points
-                  FROM combo_candidates_wsdot_3) AS sq
+                  FROM combo_candidates_final_wsdot) AS sq
             -- Limit existing infrastructure within 10 miles from the line
-             WHERE st_dwithin(line, sq.points, .224)
+             WHERE st_dwithin(line, sq.points, .24)
              UNION
              -- Concatenate with list of all shortest lines with ratio of 1.0
              SELECT 1.0,
@@ -140,8 +140,8 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
         WHERE (spacings > 50))
         ON CONFLICT (md5(geom::TEXT))
         DO UPDATE
-        SET trip_count = trip_infeasibility_combo_wsdot_2.trip_count + EXCLUDED.trip_count, 
-           od_pairs = trip_infeasibility_combo_wsdot_2.od_pairs || \', \' || EXCLUDED.od_pairs;'
+        SET trip_count = trip_infeasibility_combo_after_wsdot.trip_count + EXCLUDED.trip_count, 
+           od_pairs = trip_infeasibility_combo_after_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
     )
   rs = dbSendQuery(main_con, insert_query)
   dbClearResult(rs)

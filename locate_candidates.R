@@ -4,11 +4,11 @@ library(RPostgres)
 
 main_con = dbConnect(
   Postgres(),
-  host = "",
-  dbname = "",
-  user = "",
-  password = "",
-  port = ""
+  host = Sys.getenv("MAIN_HOST"),
+  dbname = Sys.getenv("MAIN_DB"),
+  user = Sys.getenv("MAIN_USER"),
+  password = Sys.getenv("MAIN_PWD"),
+  port = Sys.getenv("MAIN_PORT")
 )
 
 # Bins for spacing; 50 mile increment, last is minimum length considered
@@ -23,7 +23,7 @@ for (i in 1:(length(all_vals)-1)) {
     current_spacing = current_spacing + station_spacing
     insert_query = 
       paste0(
-        'INSERT INTO combo_candidates_wsdot_2 (gid,trip_count,cid,type,geom,length,dist_bin,dist_to_desired,rank)
+        'INSERT INTO combo_candidates_wsdot (gid,trip_count,cid,type,geom,length,dist_bin,dist_to_desired,rank)
           SELECT *
           FROM
           (SELECT segments.gid,
@@ -48,8 +48,8 @@ for (i in 1:(length(all_vals)-1)) {
               \'GAS\' AS "type",
               ST_LineLocatePoint(segments.geom, geom) AS ratio
               FROM all_gas_stations
-              -- Limit to infrastructure within 5 miles
-              WHERE ST_DWithin(segments.geom, geom, .112)) AS candidates) AS ranked_locations
+              -- Limit to infrastructure within 10 miles
+              WHERE ST_DWithin(segments.geom, geom, .24)) AS candidates) AS ranked_locations
         WHERE rank = 1 AND length <= ',all_vals[i],' AND length > ',all_vals[i+1],' 
         ORDER BY trip_count DESC'
       )
