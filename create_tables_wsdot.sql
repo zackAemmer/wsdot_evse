@@ -62,3 +62,8 @@ FROM wa_bevs
 WHERE connector_code = 2 OR connector_code = 3
 GROUP BY zip_code) AS wa_bevs
 ON at1.origin = wa_bevs.zip_code
+
+
+-- WSDOT cities are in different SRID (run after adding centroids from QGIS)
+-- Also need to transform the geometry
+SELECT UpdateGeometrySRID('city_limits_centroids','geom',3857);

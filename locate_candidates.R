@@ -39,12 +39,6 @@ for (i in 1:(length(all_vals)-1)) {
             CROSS JOIN LATERAL
             (SELECT id,
               geom,
-              \'CITY\' AS "type",
-              ST_LineLocatePoint(segments.geom, geom) AS ratio
-              FROM city_limits_centroids
-              UNION ALL
-              SELECT id,
-              geom,
               \'GAS\' AS "type",
               ST_LineLocatePoint(segments.geom, geom) AS ratio
               FROM all_gas_stations
