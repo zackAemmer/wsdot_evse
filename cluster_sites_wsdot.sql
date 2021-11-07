@@ -1,6 +1,6 @@
 -- Cluster candidate sites based on DBSCAN algorithm
 SELECT *,
-		ST_ClusterDBSCAN(geom, eps:=.12, minpoints:=1) OVER () AS cluster_id
+		ST_ClusterDBSCAN(geom, eps:=.48, minpoints:=1) OVER () AS cluster_id
 INTO combo_candidates_clustered_5_wsdot
 FROM combo_candidates_wsdot
 
