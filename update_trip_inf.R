@@ -125,7 +125,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
                   WHERE connector_code = 2 OR connector_code = 3
                   UNION ALL
                   SELECT geom AS points
-                  FROM combo_candidates_final_wsdot) AS sq
+                  FROM combo_candidates_final_10_wsdot) AS sq
             -- Limit existing infrastructure within 10 miles from the line
              WHERE st_dwithin(line, sq.points, .24)
              UNION
