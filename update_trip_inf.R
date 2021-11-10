@@ -18,12 +18,22 @@ all_trips <- DBI::dbGetQuery(main_con,
                              "SELECT *
                                FROM (SELECT origin,
                                             destination,
-                                            SUM(ccounts) AS ccounts
+                                            SUM(ccounts) AS trip_counts,
+                                            -- Left join leaves zip codes as null if not in wa_bevs
+                                            COALESCE(SUM(evcounts),0) AS bev_counts
                                     FROM (SELECT
                                           CASE WHEN origin <= destination THEN origin ELSE destination END AS origin,
                                           CASE WHEN origin <= destination THEN destination ELSE origin END AS destination,
-                                          ccounts
-                                          FROM all_trips_count_full) AS ordered
+                                          ccounts,
+                                          evcounts
+                                          FROM all_trips_count_full
+                                          LEFT JOIN
+                                          (SELECT COUNT(*) AS evcounts,
+                                                  zip_code
+                                          FROM wa_bevs
+                                          WHERE connector_code = 2 OR connector_code = 3
+                                          GROUP BY zip_code) AS wa_bevs
+                                          ON all_trips_count_full.origin = wa_bevs.zip_code) AS ordered
                                     GROUP BY origin, destination) AS unique_ods;")
 
 cl = makeCluster(10)
@@ -52,8 +62,9 @@ opts <- list(progress = progress)
 foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packages=c("DBI","RPostgres")) %dopar% {
   insert_query <-
     paste0(
-      'INSERT INTO trip_infeasibility_combo_wsdot (trip_count, od_pairs, length, geom)
-        (SELECT ',all_trips$ccounts[row],' AS trip_count,
+      'INSERT INTO trip_infeasibility_combo_wsdot (trip_count, bev_count, od_pairs, length, geom)
+        (SELECT ',all_trips$trip_counts[row],' AS trip_count,
+                ',all_trips$bev_counts[row],' AS bev_count,
                 ',all_trips$origin[row],all_trips$destination[row],' AS od_pairs,
                 sq3.spacings AS length,
                 -- Select portion of the line that was infeasible
@@ -87,8 +98,9 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
         WHERE (spacings > 50))
         ON CONFLICT (md5(geom::TEXT))
         DO UPDATE
-        SET trip_count = trip_infeasibility_combo_wsdot.trip_count + EXCLUDED.trip_count, 
-           od_pairs = trip_infeasibility_combo_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
+        SET trip_count = trip_infeasibility_combo_wsdot.trip_count + EXCLUDED.trip_count,
+            bev_count = trip_infeasibility_combo_wsdot.bev_count + EXCLUDED.bev_count,
+            od_pairs = trip_infeasibility_combo_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
     )
   rs = dbSendQuery(main_con, insert_query)
   dbClearResult(rs)
@@ -102,8 +114,9 @@ dbDisconnect(main_con)
 foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packages=c("DBI","RPostgres")) %dopar% {
   insert_query <-
     paste0(
-      'INSERT INTO trip_infeasibility_combo_after_wsdot (trip_count, od_pairs, length, geom)
-        (SELECT ',all_trips$ccounts[row],' AS trip_count,
+      'INSERT INTO trip_infeasibility_combo_after_wsdot (trip_count, bev_count, od_pairs, length, geom)
+        (SELECT ',all_trips$trip_counts[row],' AS trip_count,
+                ',all_trips$bev_counts[row],' AS bev_count,
                 ',all_trips$origin[row],all_trips$destination[row],' AS od_pairs,
                 sq3.spacings AS length,
                 -- Select portion of the line that was infeasible
@@ -125,7 +138,7 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
                   WHERE connector_code = 2 OR connector_code = 3
                   UNION ALL
                   SELECT geom AS points
-                  FROM combo_candidates_final_10_wsdot) AS sq
+                  FROM combo_candidates_final_wsdot) AS sq
             -- Limit existing infrastructure within 10 miles from the line
              WHERE st_dwithin(line, sq.points, .24)
              UNION
@@ -140,8 +153,9 @@ foreach(row=1:nrow(all_trips), .options.snow=opts, .noexport="main_con", .packag
         WHERE (spacings > 50))
         ON CONFLICT (md5(geom::TEXT))
         DO UPDATE
-        SET trip_count = trip_infeasibility_combo_after_wsdot.trip_count + EXCLUDED.trip_count, 
-           od_pairs = trip_infeasibility_combo_after_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
+        SET trip_count = trip_infeasibility_combo_after_wsdot.trip_count + EXCLUDED.trip_count,
+            bev_count = trip_infeasibility_combo_after_wsdot.bev_count + EXCLUDED.bev_count,
+            od_pairs = trip_infeasibility_combo_after_wsdot.od_pairs || \', \' || EXCLUDED.od_pairs;'
     )
   rs = dbSendQuery(main_con, insert_query)
   dbClearResult(rs)
