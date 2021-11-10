@@ -4,6 +4,7 @@ SELECT *,
 INTO combo_candidates_clustered_wsdot
 FROM combo_candidates_wsdot;
 
+
 -- Select the best candidate site from each spatial cluster
 SELECT *
 INTO combo_candidates_final_wsdot
@@ -14,8 +15,8 @@ FROM
  		combo_candidates_clustered_wsdot.trip_count,
  		combo_candidates_clustered_wsdot.bev_count,
  		combo_candidates_clustered_wsdot.dist_bin,
- 		combo_candidates_clustered_wsdot.dist_to_desired
- 		geom,
+ 		combo_candidates_clustered_wsdot.dist_to_desired,
+ 		combo_candidates_clustered_wsdot.geom,
 		ROW_NUMBER() OVER (PARTITION BY cluster_id ORDER BY cid_count DESC) AS rank
 FROM combo_candidates_clustered_wsdot
 JOIN
