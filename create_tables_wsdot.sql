@@ -7,7 +7,6 @@ CREATE TABLE trip_infeasibility_combo_wsdot (
     gid serial primary key, 
     geom geometry
 );
-
 create unique index unique_geom_index_combo_wsdot on trip_infeasibility_combo_wsdot (md5(geom::TEXT));
 
 
@@ -48,5 +47,14 @@ CREATE TABLE trip_infeasibility_combo_after_wsdot (
     gid serial primary key, 
     geom geometry
 );
-
 create unique index unique_geom_index_combo_after_wsdot on trip_infeasibility_combo_after_wsdot (md5(geom::TEXT));
+
+CREATE TABLE trip_infeasibility_combo_after_add_wsdot (
+    trip_count integer,
+    bev_count integer,
+    od_pairs text, 
+    length double precision, 
+    gid serial primary key, 
+    geom geometry
+);
+create unique index unique_geom_index_combo_after_add_wsdot on trip_infeasibility_combo_after_add_wsdot (md5(geom::TEXT));
