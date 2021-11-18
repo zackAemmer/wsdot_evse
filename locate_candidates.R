@@ -21,13 +21,14 @@ for (i in 1:(length(all_vals)-1)) {
   current_spacing = 0
   for (j in 1:num_stations) {
     current_spacing = current_spacing + station_spacing
-    insert_query = 
+    insert_query =
       paste0(
-        'INSERT INTO combo_candidates_wsdot (gid,trip_count,cid,type,geom,length,dist_bin,dist_to_desired,rank)
+        'INSERT INTO combo_candidates_wsdot (gid,trip_count,bev_count,cid,type,geom,length,dist_bin,dist_to_desired,rank)
           SELECT *
           FROM
           (SELECT segments.gid,
             segments.trip_count,
+            segments.bev_count,
             candidates.id,
             candidates.type,
             candidates.geom,
