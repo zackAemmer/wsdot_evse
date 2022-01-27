@@ -34,7 +34,7 @@ ORDER BY cid DESC;
 
 -- Select the best candidate site from each spatial cluster
 SELECT *
-INTO combo_candidates_final_wsdot
+INTO combo_candidates_automatic_wsdot
 FROM
 (SELECT cid_counts.cid,
  		cid_counts.cid_count,
@@ -56,7 +56,7 @@ ORDER BY cid DESC;
 
 -- Select the best upgrade site from each spatial cluster
 SELECT *
-INTO combo_upgrades_final_wsdot
+INTO combo_upgrades_automatic_wsdot
 FROM
 (SELECT cid_counts.cid,
  		cid_counts.cid_count,
